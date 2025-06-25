@@ -4,8 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { LlmProvider } from './llmProvider.js';
+import { providerFactory } from '../providers/providerFactory.js';
 import {
-  EmbedContentParameters,
   GenerateContentConfig,
   Part,
   SchemaUnion,
@@ -32,9 +33,7 @@ import { retryWithBackoff } from '../utils/retry.js';
 import { getErrorMessage } from '../utils/errors.js';
 import { tokenLimit } from './tokenLimits.js';
 import {
-  ContentGenerator,
   ContentGeneratorConfig,
-  createContentGenerator,
 } from './contentGenerator.js';
 import { ProxyAgent, setGlobalDispatcher } from 'undici';
 import { DEFAULT_GEMINI_FLASH_MODEL } from '../config/models.js';
@@ -47,7 +46,7 @@ function isThinkingSupported(model: string) {
 
 export class GeminiClient {
   private chat?: GeminiChat;
-  private contentGenerator?: ContentGenerator;
+  private llmProvider: LlmProvider;
   private model: string;
   private embeddingModel: string;
   private generateContentConfig: GenerateContentConfig = {
@@ -63,19 +62,11 @@ export class GeminiClient {
 
     this.model = config.getModel();
     this.embeddingModel = config.getEmbeddingModel();
+    this.llmProvider = providerFactory(config);
   }
 
   async initialize(contentGeneratorConfig: ContentGeneratorConfig) {
-    this.contentGenerator = await createContentGenerator(
-      contentGeneratorConfig,
-    );
     this.chat = await this.startChat();
-  }
-  private getContentGenerator(): ContentGenerator {
-    if (!this.contentGenerator) {
-      throw new Error('Content generator not initialized');
-    }
-    return this.contentGenerator;
   }
 
   async addHistory(content: Content) {
@@ -142,7 +133,7 @@ export class GeminiClient {
           );
           if (result.llmContent) {
             initialParts.push({
-              text: `\n--- Full File Context ---\n${result.llmContent}`,
+              text: `\n--- Full File Context ----\n${result.llmContent}`,
             });
           } else {
             console.warn(
@@ -195,7 +186,7 @@ export class GeminiClient {
         : this.generateContentConfig;
       return new GeminiChat(
         this.config,
-        this.getContentGenerator(),
+        this.llmProvider,
         this.model,
         {
           systemInstruction,
@@ -266,12 +257,9 @@ export class GeminiClient {
       };
 
       const apiCall = () =>
-        this.getContentGenerator().generateContent({
-          model,
-          config: {
+        this.llmProvider.generateContent({
+          generationConfig: {
             ...requestConfig,
-            systemInstruction,
-            responseSchema: schema,
             responseMimeType: 'application/json',
           },
           contents,
@@ -359,9 +347,8 @@ export class GeminiClient {
       };
 
       const apiCall = () =>
-        this.getContentGenerator().generateContent({
-          model: modelToUse,
-          config: requestConfig,
+        this.llmProvider.generateContent({
+          generationConfig: requestConfig,
           contents,
         });
 
@@ -395,35 +382,27 @@ export class GeminiClient {
     if (!texts || texts.length === 0) {
       return [];
     }
-    const embedModelParams: EmbedContentParameters = {
-      model: this.embeddingModel,
-      contents: texts,
-    };
 
-    const embedContentResponse =
-      await this.getContentGenerator().embedContent(embedModelParams);
+    const embedContentResponse = await this.llmProvider.embedContent({
+      model: this.embeddingModel,
+      content: {
+        parts: texts.map((text) => ({ text })),
+        role: 'user',
+      },
+    });
     if (
-      !embedContentResponse.embeddings ||
-      embedContentResponse.embeddings.length === 0
+      !embedContentResponse.embedding
     ) {
       throw new Error('No embeddings found in API response.');
     }
 
-    if (embedContentResponse.embeddings.length !== texts.length) {
+    const values = embedContentResponse.embedding.values;
+    if (!values || values.length === 0) {
       throw new Error(
-        `API returned a mismatched number of embeddings. Expected ${texts.length}, got ${embedContentResponse.embeddings.length}.`,
+        `API returned an empty embedding for input text.`,
       );
     }
-
-    return embedContentResponse.embeddings.map((embedding, index) => {
-      const values = embedding.values;
-      if (!values || values.length === 0) {
-        throw new Error(
-          `API returned an empty embedding for input text at index ${index}: "${texts[index]}"`,
-        );
-      }
-      return values;
-    });
+    return [values];
   }
 
   async tryCompressChat(
@@ -437,7 +416,7 @@ export class GeminiClient {
     }
 
     const { totalTokens: originalTokenCount } =
-      await this.getContentGenerator().countTokens({
+      await this.llmProvider.countTokens({
         model: this.model,
         contents: history,
       });
@@ -471,7 +450,7 @@ export class GeminiClient {
       text: 'Summarize our conversation up to this point. The summary should be a concise yet comprehensive overview of all key topics, questions, answers, and important details discussed. This summary will replace the current chat history to conserve tokens, so it must capture everything essential to understand the context and continue our conversation effectively as if no information was lost.',
     };
     const response = await this.getChat().sendMessage({
-      message: summarizationRequestMessage,
+      message: summarizationRequestEmitter,
     });
     const newHistory = [
       {
@@ -485,14 +464,15 @@ export class GeminiClient {
     ];
     this.chat = await this.startChat(newHistory);
     const newTokenCount = (
-      await this.getContentGenerator().countTokens({
+      await this.llmProvider.countTokens({
         model: this.model,
         contents: newHistory,
       })
     ).totalTokens;
 
     return originalTokenCount && newTokenCount
-      ? {
+      ?
+      {
           originalTokenCount,
           newTokenCount,
         }

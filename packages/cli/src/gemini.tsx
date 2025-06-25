@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import ConfigComponent from './config/config.js';
 import React from 'react';
 import { render } from 'ink';
 import { AppWrapper } from './ui/App.js';
@@ -82,6 +83,13 @@ async function relaunchWithAdditionalArgs(additionalArgs: string[]) {
 }
 
 export async function main() {
+  const [command] = process.argv.slice(2);
+
+  if (command === 'config') {
+    render(<ConfigComponent />);
+    return;
+  }
+
   const workspaceRoot = process.cwd();
   const settings = loadSettings(workspaceRoot);
 

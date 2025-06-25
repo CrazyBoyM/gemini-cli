@@ -826,6 +826,7 @@ const App = ({ config, settings, startupWarnings = [] }: AppProps) => {
             </Box>
           )}
           <Footer
+            config={config}
             model={currentModel}
             targetDir={config.getTargetDir()}
             debugMode={config.getDebugMode()}

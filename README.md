@@ -51,6 +51,31 @@ If you need to use a specific model or require a higher request capacity, you ca
 
 For other authentication methods, including Google Workspace accounts, see the [authentication](./docs/cli/authentication.md) guide.
 
+### Advanced: Using Third-Party LLM Providers
+
+The Gemini CLI is designed to be extensible, allowing you to connect to different Large Language Model (LLM) providers beyond Google's own models. This enables you to leverage other powerful models like those from OpenAI, Anthropic, or even a locally running Ollama instance, directly within your workflow.
+
+**How to Configure a Third-Party Provider:**
+
+1.  **Open the Configuration Menu:**
+    Run the following command to open an interactive configuration screen:
+    ```bash
+    gemini config
+    ```
+
+2.  **Select Your Provider:**
+    You will see a list of available providers (e.g., `Gemini`, `OpenAI`, `Claude`, `Ollama`). Use the arrow keys to navigate and press `Enter` to select the one you wish to use. The CLI will now use this provider for all subsequent commands.
+
+3.  **Configure Provider Settings:**
+    After selecting a provider, its specific settings (like `apiKey` or `model`) will be displayed.
+    - Navigate to the setting you want to change (e.g., `apiKey`).
+    - Press `Enter` or follow the on-screen prompts to start editing.
+    - Paste your API key or enter the desired model name, and press `Enter` to save.
+    - For OpenAI, you can also configure a custom `baseUrl` to use with compatible APIs like Azure OpenAI.
+    - For Ollama, the CLI will automatically detect and list your locally installed models.
+
+The configuration is saved automatically. The next time you run `gemini`, it will use the newly configured provider. This allows for a flexible and powerful way to integrate your favorite LLMs into your development workflow.
+
 ## Examples
 
 Once the CLI is running, you can start interacting with Gemini from your shell.

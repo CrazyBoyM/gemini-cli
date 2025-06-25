@@ -29,6 +29,12 @@ export interface Tool<
   description: string;
 
   /**
+   * A list of providers that this tool supports.
+   * If undefined, it is assumed to support all providers.
+   */
+  supportedProviders?: string[];
+
+  /**
    * Function declaration schema from @google/genai
    */
   schema: FunctionDeclaration;

@@ -18,7 +18,13 @@ import { useShellHistory } from '../hooks/useShellHistory.js';
 import { useCompletion } from '../hooks/useCompletion.js';
 import { isAtCommand, isSlashCommand } from '../utils/commandUtils.js';
 import { SlashCommand } from '../hooks/slashCommandProcessor.js';
-import { Config } from '@google/gemini-cli-core';
+import { ApprovalMode, Config } from '@google/gemini-cli-core';
+
+const API_KEY_PATTERNS = [
+  /sk-[a-zA-Z0-9]{48}/, // OpenAI
+  /rk_test_[a-zA-Z0-9]{44}/, // Anthropic
+  /glp_[a-zA-Z0-9]{32}/, // Google
+];
 
 export interface InputPromptProps {
   buffer: TextBuffer;
@@ -50,6 +56,8 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
   setShellModeActive,
 }) => {
   const [justNavigatedHistory, setJustNavigatedHistory] = useState(false);
+  const [showApiKeyWarning, setShowApiKeyWarning] = useState(false);
+  const [pendingSubmission, setPendingSubmission] = useState('');
 
   const completion = useCompletion(
     buffer.text,
@@ -64,6 +72,23 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
 
   const handleSubmitAndClear = useCallback(
     (submittedValue: string) => {
+      const isApiKey = API_KEY_PATTERNS.some((pattern) =>
+        pattern.test(submittedValue),
+      );
+
+      // API Key check
+      if (isApiKey && config.getApprovalMode() !== ApprovalMode.YOLO) {
+        setPendingSubmission(submittedValue);
+        setShowApiKeyWarning(true);
+        return;
+      }
+
+      if (isApiKey && config.getApprovalMode() === ApprovalMode.YOLO) {
+        console.warn(
+          '[SECURITY] Potential API key detected. Submitting automatically due to YOLO mode.',
+        );
+      }
+
       if (shellModeActive) {
         shellHistory.addCommandToHistory(submittedValue);
       }
@@ -73,8 +98,30 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
       onSubmit(submittedValue);
       resetCompletionState();
     },
-    [onSubmit, buffer, resetCompletionState, shellModeActive, shellHistory],
+    [
+      onSubmit,
+      buffer,
+      resetCompletionState,
+      shellModeActive,
+      shellHistory,
+      setPendingSubmission,
+      setShowApiKeyWarning,
+      config,
+    ],
   );
+
+  const handleApiKeyConfirmation = (confirmed: boolean) => {
+    setShowApiKeyWarning(false);
+    if (confirmed && pendingSubmission) {
+      if (shellModeActive) {
+        shellHistory.addCommandToHistory(pendingSubmission);
+      }
+      buffer.setText('');
+      onSubmit(pendingSubmission);
+      resetCompletionState();
+    }
+    setPendingSubmission('');
+  };
 
   const customSetTextAndResetCompletionSignal = useCallback(
     (newText: string) => {
@@ -157,7 +204,7 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
 
   useInput(
     (input, key) => {
-      if (!focus) {
+      if (!focus || showApiKeyWarning) {
         return;
       }
       const query = buffer.text;
@@ -360,6 +407,15 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
   const [cursorVisualRowAbsolute, cursorVisualColAbsolute] =
     buffer.visualCursor;
   const scrollVisualRow = buffer.visualScrollRow;
+
+  if (showApiKeyWarning) {
+    return (
+      <ConfirmationDialog
+        prompt="It looks like you're about to send a secret key. Are you sure you want to continue?"
+        onConfirmation={handleApiKeyConfirmation}
+      />
+    );
+  }
 
   return (
     <>

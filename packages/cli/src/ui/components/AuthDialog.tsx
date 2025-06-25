@@ -115,6 +115,11 @@ export function AuthDialog({
         <Text color={Colors.Gray}>(Use Enter to select)</Text>
       </Box>
       <Box marginTop={1}>
+        <Text color={Colors.Gray}>
+          (To use other providers like OpenAI, run 'gemini config')
+        </Text>
+      </Box>
+      <Box marginTop={1}>
         <Link url="https://github.com/google/gemini-cli/blob/main/docs/tos-privacy.md">
           <Text>Terms of Services and Privacy Notice for Gemini CLI</Text>
         </Link>

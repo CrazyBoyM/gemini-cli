@@ -199,8 +199,14 @@ export class ToolRegistry {
    */
   getFunctionDeclarations(): FunctionDeclaration[] {
     const declarations: FunctionDeclaration[] = [];
+    const provider = this.config.getProvider();
     this.tools.forEach((tool) => {
-      declarations.push(tool.schema);
+      if (
+        !tool.supportedProviders ||
+        tool.supportedProviders.includes(provider)
+      ) {
+        declarations.push(tool.schema);
+      }
     });
     return declarations;
   }
@@ -209,7 +215,12 @@ export class ToolRegistry {
    * Returns an array of all registered and discovered tool instances.
    */
   getAllTools(): Tool[] {
-    return Array.from(this.tools.values());
+    const provider = this.config.getProvider();
+    return Array.from(this.tools.values()).filter(
+      (tool) =>
+        !tool.supportedProviders ||
+        tool.supportedProviders.includes(provider),
+    );
   }
 
   /**

@@ -57,6 +57,7 @@ interface CliArgs {
 
 async function parseArguments(): Promise<CliArgs> {
   const argv = await yargs(hideBin(process.argv))
+    .command('config', 'Configure providers and other settings')
     .option('model', {
       alias: 'm',
       type: 'string',
@@ -197,6 +198,35 @@ export async function loadCliConfig(
 
   const sandboxConfig = await loadSandboxConfig(settings, argv);
 
+  const provider =
+    settings.provider ||
+    (process.env.OPENAI_API_KEY ? 'openai' : undefined) ||
+    (process.env.ANTHROPIC_API_KEY ? 'claude' : undefined) ||
+    'gemini';
+
+  const providers = {
+    ...settings.providers,
+    openai: {
+      apiKey: settings.providers?.openai?.apiKey || process.env.OPENAI_API_KEY,
+      baseUrl:
+        settings.providers?.openai?.baseUrl || process.env.OPENAI_BASE_URL,
+      model: settings.providers?.openai?.model || 'gpt-4o',
+    },
+    claude: {
+      apiKey:
+        settings.providers?.claude?.apiKey || process.env.ANTHROPIC_API_KEY,
+      model:
+        settings.providers?.claude?.model || 'claude-3-opus-20240229',
+    },
+    ollama: {
+      baseUrl:
+        settings.providers?.ollama?.baseUrl ||
+        process.env.OLLAMA_BASE_URL ||
+        'http://localhost:11434',
+      model: settings.providers?.ollama?.model || 'llama3',
+    },
+  };
+
   return new Config({
     sessionId,
     embeddingModel: DEFAULT_GEMINI_EMBEDDING_MODEL,
@@ -245,6 +275,8 @@ export async function loadCliConfig(
     bugCommand: settings.bugCommand,
     model: argv.model!,
     extensionContextFilePaths,
+    provider,
+    providers,
   });
 }
 

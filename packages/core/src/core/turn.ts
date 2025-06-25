@@ -5,22 +5,10 @@
  */
 
 import {
-  PartListUnion,
-  GenerateContentResponse,
-  FunctionCall,
-  FunctionDeclaration,
-  GenerateContentResponseUsageMetadata,
-} from '@google/genai';
-import {
-  ToolCallConfirmationDetails,
-  ToolResult,
-  ToolResultDisplay,
-} from '../tools/tools.js';
-import { getResponseText } from '../utils/generateContentResponseUtilities.js';
-import { reportError } from '../utils/errorReporting.js';
-import { getErrorMessage } from '../utils/errors.js';
-import { GeminiChat } from './geminiChat.js';
-import { UnauthorizedError, toFriendlyError } from '../utils/errors.js';
+  MalformedToolCallError,
+  UnauthorizedError,
+  toFriendlyError,
+} from '../utils/errors.js';
 
 // Define a structure for tools passed to the server
 export interface ServerTool {
@@ -42,6 +30,7 @@ export enum GeminiEventType {
   ToolCallRequest = 'tool_call_request',
   ToolCallResponse = 'tool_call_response',
   ToolCallConfirmation = 'tool_call_confirmation',
+  ToolCallError = 'tool_call_error',
   UserCancelled = 'user_cancelled',
   Error = 'error',
   ChatCompressed = 'chat_compressed',
@@ -70,6 +59,11 @@ export interface ToolCallResponseInfo {
   responseParts: PartListUnion;
   resultDisplay: ToolResultDisplay | undefined;
   error: Error | undefined;
+}
+
+export interface ToolCallErrorInfo {
+  message: string;
+  toolName?: string;
 }
 
 export interface ServerToolCallConfirmationDetails {
@@ -107,6 +101,11 @@ export type ServerGeminiToolCallConfirmationEvent = {
   value: ServerToolCallConfirmationDetails;
 };
 
+export type ServerGeminiToolCallErrorEvent = {
+  type: GeminiEventType.ToolCallError;
+  value: ToolCallErrorInfo;
+};
+
 export type ServerGeminiUserCancelledEvent = {
   type: GeminiEventType.UserCancelled;
 };
@@ -137,6 +136,7 @@ export type ServerGeminiStreamEvent =
   | ServerGeminiToolCallRequestEvent
   | ServerGeminiToolCallResponseEvent
   | ServerGeminiToolCallConfirmationEvent
+  | ServerGeminiToolCallErrorEvent
   | ServerGeminiUserCancelledEvent
   | ServerGeminiErrorEvent
   | ServerGeminiChatCompressedEvent
@@ -226,6 +226,13 @@ export class Turn {
       }
     } catch (e) {
       const error = toFriendlyError(e);
+      if (error instanceof MalformedToolCallError) {
+        yield {
+          type: GeminiEventType.ToolCallError,
+          value: { message: error.message },
+        };
+        return;
+      }
       if (error instanceof UnauthorizedError) {
         throw error;
       }

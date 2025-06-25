@@ -4,15 +4,21 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import {
+  Config,
+  shortenPath,
+  tildeifyPath,
+  tokenLimit,
+} from '@google/gemini-cli-core';
 import React from 'react';
 import { Box, Text } from 'ink';
 import { Colors } from '../colors.js';
-import { shortenPath, tildeifyPath, tokenLimit } from '@google/gemini-cli-core';
 import { ConsoleSummaryDisplay } from './ConsoleSummaryDisplay.js';
 import process from 'node:process';
 import { MemoryUsageDisplay } from './MemoryUsageDisplay.js';
 
 interface FooterProps {
+  config: Config;
   model: string;
   targetDir: string;
   branchName?: string;
@@ -28,6 +34,7 @@ interface FooterProps {
 }
 
 export const Footer: React.FC<FooterProps> = ({
+  config,
   model,
   targetDir,
   branchName,
@@ -41,6 +48,7 @@ export const Footer: React.FC<FooterProps> = ({
 }) => {
   const limit = tokenLimit(model);
   const percentage = totalTokenCount / limit;
+  const provider = config.getProvider();
 
   return (
     <Box marginTop={1} justifyContent="space-between" width="100%">
@@ -83,7 +91,7 @@ export const Footer: React.FC<FooterProps> = ({
       <Box alignItems="center">
         <Text color={Colors.AccentBlue}>
           {' '}
-          {model}{' '}
+          {provider} | {model}{' '}
           <Text color={Colors.Gray}>
             ({((1 - percentage) * 100).toFixed(0)}% context left)
           </Text>

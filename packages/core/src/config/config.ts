@@ -126,6 +126,8 @@ export interface ConfigParameters {
   bugCommand?: BugCommandSettings;
   model: string;
   extensionContextFilePaths?: string[];
+  provider?: string;
+  providers?: Record<string, Record<string, string>>;
 }
 
 export class Config {
@@ -165,6 +167,8 @@ export class Config {
   private readonly model: string;
   private readonly extensionContextFilePaths: string[];
   private modelSwitchedDuringSession: boolean = false;
+  private readonly provider: string;
+  private readonly providers: Record<string, Record<string, string>> | undefined;
   flashFallbackHandler?: FlashFallbackHandler;
 
   constructor(params: ConfigParameters) {
@@ -207,6 +211,8 @@ export class Config {
     this.bugCommand = params.bugCommand;
     this.model = params.model;
     this.extensionContextFilePaths = params.extensionContextFilePaths ?? [];
+    this.provider = params.provider ?? 'gemini';
+    this.providers = params.providers;
 
     if (params.contextFileName) {
       setGeminiMdFilename(params.contextFileName);
@@ -452,6 +458,16 @@ export class Config {
       await this.gitService.initialize();
     }
     return this.gitService;
+  }
+
+  getProvider(): string {
+    return this.provider;
+  }
+
+  getProviderConfig(
+    provider: string,
+  ): Record<string, string> | undefined {
+    return this.providers?.[provider];
   }
 }
 
